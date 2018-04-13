@@ -1,21 +1,10 @@
-from collections import namedtuple
-
 import re
+import pandas
 
 enron_dataset_file_name = 'enron_email_dataset_sample.csv'
 
 
 def main():
-    Email_Features = namedtuple('Email_Features', ['date',
-                                                   'sender_address',
-                                                   'recipient',
-                                                   'subject',
-                                                   'sender_name',
-                                                   'recipient_name',
-                                                   'cc',
-                                                   'bcc',
-                                                   'folder',
-                                                   'body'])
     with open(enron_dataset_file_name, 'rb') as f_in:
         raw_email_info = f_in.read()
 
@@ -28,7 +17,7 @@ def main():
         recipient_names = re.findall(r'\nX-To: ([ A-Za-z]*)', raw_email_info)
         ccs = re.findall(r'\nX-cc: (.*)', raw_email_info)
         bccs = re.findall(r'\nX-bcc: (.*)', raw_email_info)
-        folders = [clean_folder_name(folder) for folder in re.findall(r'\nX-Folder: (.*)', raw_email_info)]
+        folders = re.findall(r'"[a-zA-z-]*/(.*)/.*,"Message-ID.*>', raw_email_info)
 
         # Strip out all features to extract email body
         raw_email_info = re.sub(r'\nDate: (.*)', '', raw_email_info)
@@ -51,27 +40,47 @@ def main():
 
         bodies = [clean_email_body(body) for body in raw_email_info.split('file_name_and_message_id')[1:]]
 
-        email_data = [Email_Features(*feature_list) for feature_list in zip(dates,
-                                                                            sender_addresses,
-                                                                            recipients,
-                                                                            subjects,
-                                                                            sender_names,
-                                                                            recipient_names,
-                                                                            ccs,
-                                                                            bccs,
-                                                                            folders,
-                                                                            bodies)]
+        email_data = zip(dates,
+                         sender_addresses,
+                         recipients,
+                         subjects,
+                         sender_names,
+                         recipient_names,
+                         ccs,
+                         bccs,
+                         folders,
+                         bodies)
 
-        for data in email_data:
-            print data
+        # Stick features into a dataframe to make it easy to query and filter out data
+        df = pandas.DataFrame(email_data, columns=['date',
+                                                   'sender_address',
+                                                   'recipient',
+                                                   'subject',
+                                                   'sender_name',
+                                                   'recipient_name',
+                                                   'cc',
+                                                   'bcc',
+                                                   'folder',
+                                                   'body'])
+
+        # WIP: remove folders that are most likely computer generated
+        new_df = df[
+            (df.folder != '_sent_mail') &
+            (df.folder != 'all_documents') &
+            (df.folder != 'deleted_items') &
+            (df.folder != 'inbox') &
+            (df.folder != 'discussion_threads') &
+            (df.folder != 'notes_inbox') &
+            (df.folder != 'sent_items') &
+            (df.folder != 'sent')
+        ]
+
+        print df.shape
+        print new_df.shape
 
 
 def clean_email_body(body):
     return body
-
-
-def clean_folder_name(folder_name):
-    return folder_name
 
 
 if __name__ == '__main__':
